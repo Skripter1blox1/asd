@@ -250,9 +250,9 @@ local function startScript()
         local f = create("Frame", {Parent=slBg, Size=UDim2.new((S[k]-mi)/(ma-mi),0,1,0), BackgroundColor3=S.HudAccent})
         create("UICorner", {Parent=f, CornerRadius=UDim.new(1,0)})
         local d = false
-        slBg.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d=true end end)
-        table.insert(connections, UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d=false end end))
-        table.insert(connections, UIS.InputChanged:Connect(function(i) if d and i.UserInputType==Enum.UserInputType.MouseMovement then local pos=math.clamp((i.Position.X-slBg.AbsolutePosition.X)/slBg.AbsoluteSize.X,0,1); f.Size=UDim2.new(pos,0,1,0); local val=mi+pos*(ma-mi); val=isF and math.floor(val*10)/10 or math.floor(val); l.Text=n..": "..tostring(val); S[k]=val end end))
+        slBg.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then d=true end end)
+        table.insert(connections, UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then d=false end end))
+        table.insert(connections, UIS.InputChanged:Connect(function(i) if d and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then local pos=math.clamp((i.Position.X-slBg.AbsolutePosition.X)/slBg.AbsoluteSize.X,0,1); f.Size=UDim2.new(pos,0,1,0); local val=mi+pos*(ma-mi); val=isF and math.floor(val*10)/10 or math.floor(val); l.Text=n..": "..tostring(val); S[k]=val end end))
     end
     local function rgbSlider(p, n, y, x, k, onChange)
         local l = create("TextLabel", {Parent=p, Text=n, Size=UDim2.new(0.42,0,0,20), Position=UDim2.new(x,0,0,y), Font=Enum.Font.GothamMedium, TextSize=12, TextColor3=S[k], TextStrokeTransparency=0.5, BackgroundTransparency=1, TextXAlignment=Enum.TextXAlignment.Left})
@@ -261,10 +261,10 @@ local function startScript()
             local val = (comp=="R") and S[k].R or (comp=="G") and S[k].G or S[k].B
             local f = create("Frame", {Parent=sb, Size=UDim2.new(val,0,1,0), BackgroundColor3=cCol}); create("UICorner", {Parent=f, CornerRadius=UDim.new(1,0)})
             local d = false
-            sb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d=true end end)
-            table.insert(connections, UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d=false end end))
+            sb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then d=true end end)
+            table.insert(connections, UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then d=false end end))
             table.insert(connections, UIS.InputChanged:Connect(function(i)
-                if d and i.UserInputType==Enum.UserInputType.MouseMovement then
+                if d and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
                     local pos=math.clamp((i.Position.X-sb.AbsolutePosition.X)/sb.AbsoluteSize.X,0,1)
                     f.Size=UDim2.new(pos,0,1,0)
                     local cv=S[k]; S[k]=comp=="R" and Color3.new(pos,cv.G,cv.B) or comp=="G" and Color3.new(cv.R,pos,cv.B) or Color3.new(cv.R,cv.G,pos)
@@ -409,6 +409,24 @@ local function startScript()
         if not (p and p.Character and p.Character:FindFirstChildOfClass("Humanoid")) then return false end
         return p.Character:FindFirstChildOfClass("Humanoid").Health > 0 and not p.Character:FindFirstChildOfClass("ForceField")
     end
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.IgnoreWater = true
+    local function isVisible(tPart)
+        if not tPart then return false end
+        local cam = workspace.CurrentCamera
+        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, cam}
+        local origin = cam.CFrame.Position
+        local dir = tPart.Position - origin
+        local result = workspace:Raycast(origin, dir, rayParams)
+        if result and (result.Instance.Transparency > 0.5 or not result.Instance.CanCollide) then
+            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, cam, result.Instance}
+            result = workspace:Raycast(result.Position + dir.Unit * 0.1, tPart.Position - result.Position, rayParams)
+        end
+        return not result or result.Instance:IsDescendantOf(tPart.Parent)
+    end
+    
     UIS.InputBegan:Connect(function(i,gp) 
         if gp then return end
         local k=i.UserInputType==Enum.UserInputType.Keyboard and i.KeyCode or i.UserInputType
@@ -470,7 +488,7 @@ local function startScript()
                 local pS, oS = Cam:WorldToViewportPoint(part.Position)
                 if oS and pS.Z > 1 then
                     local dist = (Vector2.new(pS.X,pS.Y)-vMid).Magnitude
-                    if dist <= S.FovRadius * 1.3 then targetStillValid = true end
+                    if dist <= S.FovRadius * 1.3 and isVisible(part) then targetStillValid = true end
                 end
             end
         end
@@ -486,7 +504,7 @@ local function startScript()
                         local pS, oS = Cam:WorldToViewportPoint(part.Position) 
                         if oS and pS.Z > 1 then 
                             local dist = (Vector2.new(pS.X,pS.Y)-vMid).Magnitude
-                            if dist <= sDist then cTarget, sDist = p, dist end 
+                            if dist <= sDist and isVisible(part) then cTarget, sDist = p, dist end 
                         end 
                     end
                 end 
@@ -538,8 +556,10 @@ local function startScript()
                             mousemoverel(mX, mY) 
                         end
                     else 
+                        local tgtCFrame = CFrame.lookAt(Cam.CFrame.Position, tPos)
                         local smooth = math.clamp((deltaTime * 60) / math.max(1.5, S.Smoothness - 4), 0, 1)
-                        Cam.CFrame = Cam.CFrame:Lerp(CFrame.lookAt(Cam.CFrame.Position, tPos), smooth) 
+                        if Cam.CFrame.LookVector:Dot(tgtCFrame.LookVector) > 0.999 then smooth = 1 end
+                        Cam.CFrame = Cam.CFrame:Lerp(tgtCFrame, smooth) 
                     end
                 else cTarget = nil end
             else cTarget = nil end
@@ -557,7 +577,7 @@ local function startScript()
             local t = LocalPlayer:GetMouse().Target
             if t and t.Parent then
                 local c = (t.Parent:FindFirstChildOfClass("Humanoid") and t.Parent) or (t.Parent.Parent and t.Parent.Parent:FindFirstChildOfClass("Humanoid") and t.Parent.Parent)
-                if c and Players:GetPlayerFromCharacter(c) ~= LocalPlayer and isValid(Players:GetPlayerFromCharacter(c)) then if mouse1click then mouse1click() end tbDelay=tick() end
+                if c and Players:GetPlayerFromCharacter(c) ~= LocalPlayer and isValid(Players:GetPlayerFromCharacter(c)) then if mouse1click and not UIS.TouchEnabled then mouse1click() end tbDelay=tick() end
             end
         end
 
